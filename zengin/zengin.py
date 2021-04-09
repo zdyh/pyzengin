@@ -2,8 +2,7 @@ import re
 import sqlite3
 from collections import namedtuple
 from pathlib import Path
-from typing import Union
-from contextlib import contextmanager
+from typing import Union, List
 
 DB_PATH = Path(__file__).parent / 'zengin.db'
 
@@ -29,6 +28,7 @@ class Zengin:
     connection. This class encapsulates a DB connection and can be used as a
     context manager.
     """
+
     def __init__(self):
         self._conn = sqlite3.connect(DB_PATH)
         self._db = self._conn.cursor()
@@ -48,7 +48,7 @@ class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'b
                         defaults=['', '', '', '', '', '', '', '', ''])):
     @property
     def full_name(self):
-        if self.bank_code =='9900':
+        if self.bank_code == '9900':
             return self.branch_name
         if '営業' in self.branch_name:
             return self.branch_name
@@ -80,7 +80,7 @@ class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'b
             return []
 
     @classmethod
-    def get(cls, bank_code: str, branch_code: Union[int, str]):
+    def get(cls, bank_code: str, branch_code: Union[int, str]) -> List["Branch"]:
         branch_code = str(int(branch_code)).zfill(3)
         if len(branch_code) != 3:
             raise ValueError
@@ -90,9 +90,11 @@ class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'b
                    "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
                    "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
                    "WHERE s.bank_code=? and s.branch_code=?", (bank_code, branch_code,))
-        res = DB.fetchone()
-        if res:
-            return cls(*res)
+        res = DB.fetchall()
+        if len(res):
+            return [cls(*r) for r in res]
+        else:
+            return []
 
 
 class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_full_name', 'bank_zen_kana', 'bank_han_kana'])):

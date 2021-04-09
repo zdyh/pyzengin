@@ -8,7 +8,7 @@ setup(
     author_email='zhengdy@me.com',
     description='Japanese Bank and Branch Code Data',
     packages=find_packages(),
-    package_data={'zengin': ['zengindata.db']},
+    package_data={'zengin': ['zengin.db']},
     install_requires=[],
     setup_requires=['setuptools-scm'],
 )

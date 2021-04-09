@@ -46,6 +46,21 @@ class Zengin:
 class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'branch_zen_kana', 'branch_han_kana',
                                    'bank_name', 'bank_full_name', 'bank_zen_kana', 'bank_han_kana'],
                         defaults=['', '', '', '', '', '', '', '', ''])):
+    @property
+    def full_name(self):
+        if self.bank_code =='9900':
+            return self.branch_name
+        if '営業' in self.branch_name:
+            return self.branch_name
+        if self.branch_name.endswith('店'):
+            return self.branch_name
+        if self.branch_name.endswith('出張所'):
+            return self.branch_name
+        return self.branch_name + '支店'
+
+    def __str__(self):
+        return self.__repr__()[:-1] + f", full_name='{self.full_name}')"
+
     @classmethod
     def search(cls, bank_code, name: str):
         where_stmt = 's.name like ?'

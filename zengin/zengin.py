@@ -44,8 +44,8 @@ class Zengin:
 
 
 class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'branch_zen_kana', 'branch_han_kana',
-                                   'bank_name', 'bank_zen_kana', 'bank_han_kana'],
-                        defaults=['', '', '', '', '', '', '', ''])):
+                                   'bank_name', 'bank_full_name', 'bank_zen_kana', 'bank_han_kana'],
+                        defaults=['', '', '', '', '', '', '', '', ''])):
     @classmethod
     def search(cls, bank_code, name: str):
         where_stmt = 's.name like ?'
@@ -54,7 +54,8 @@ class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'b
             where_stmt = 's.zen_kana like ?'
 
         DB.execute("SELECT s.bank_code, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
-                   "s.han_kana branch_han_kana, b.name bank_name, b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
+                   "  s.han_kana branch_han_kana, b.name bank_name, b.full_name bank_full_name, "
+                   "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
                    "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
                    "WHERE s.bank_code=? and " + where_stmt, (bank_code, name + '%',))
         res = DB.fetchall()
@@ -70,7 +71,8 @@ class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'b
             raise ValueError
 
         DB.execute("SELECT s.bank_code, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
-                   "s.han_kana branch_han_kana, b.name bank_name, b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
+                   "  s.han_kana branch_han_kana, b.name bank_name, b.full_name bank_full_name, "
+                   "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
                    "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
                    "WHERE s.bank_code=? and s.branch_code=?", (bank_code, branch_code,))
         res = DB.fetchone()
@@ -78,14 +80,14 @@ class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'b
             return cls(*res)
 
 
-class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_zen_kana', 'bank_han_kana'])):
+class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_full_name', 'bank_zen_kana', 'bank_han_kana'])):
     @classmethod
     def get(cls, bank_code: Union[int, str]):
         code = str(int(bank_code)).zfill(4)
         if len(code) != 4:
             raise ValueError
 
-        DB.execute("select bank_code, name, zen_kana, han_kana from bank where bank_code = ?", (code,))
+        DB.execute("select bank_code, name, full_name, zen_kana, han_kana from bank where bank_code = ?", (code,))
         res = DB.fetchone()
         if res:
             return cls(*res)
@@ -93,10 +95,11 @@ class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_zen_kana', 'bank_
     @classmethod
     def search(cls, name: str):
         if full_katakana(name.translate(kana_table)):
-            DB.execute("SELECT bank_code, name, zen_kana, han_kana FROM bank WHERE zen_kana LIKE ?",
+            DB.execute("SELECT bank_code, name, full_name, zen_kana, han_kana FROM bank WHERE zen_kana LIKE ?",
                        ('%' + name.translate(kana_table) + '%',))
         else:
-            DB.execute("SELECT bank_code, name, zen_kana, han_kana FROM bank WHERE name LIKE ?", ('%' + name + '%',))
+            DB.execute("SELECT bank_code, name, full_name, zen_kana, han_kana FROM bank WHERE name LIKE ?",
+                       ('%' + name + '%',))
         res = DB.fetchall()
         if len(res):
             return [cls(*r) for r in res]
@@ -105,7 +108,7 @@ class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_zen_kana', 'bank_
 
     @classmethod
     def major_banks(cls):
-        DB.execute("select bank_code, name, zen_kana, han_kana from bank "
+        DB.execute("select bank_code, name, full_name, zen_kana, han_kana from bank "
                    "where bank_code in ('0001', '0005', '0009', '0010', '0017')")
         res = DB.fetchall()
         if len(res):
@@ -125,4 +128,3 @@ class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_zen_kana', 'bank_
 
 def get(bank_code: str, branch_code):
     return Branch.get(bank_code, branch_code)
-

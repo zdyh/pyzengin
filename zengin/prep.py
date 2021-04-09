@@ -40,6 +40,39 @@ def build_json(bank_csv):
                         branches[branch_code]['sub_branches'] = []
                     branches[branch_code]['sub_branches'].append(row)
 
+    # same name list
+    # 0401 シティバンク、エヌ・エイ
+    # 0403 バンク・オブ・アメリカ・エヌ・エイ
+    # 0429 バンクネガラインドネシア
+    # 0482 アイエヌジー　バンク　エヌ・ヴィ
+    # 0484 ナショナル・オーストラリア・バンク・リミテッド
+    # 0617 フィリピン・ナショナル・バンク
+    # 1000 信金中央金庫
+    # 2213 整理回収機構
+    for code in ['0401', '0403', '0429', '0482', '0484', '0617', '1000', '2213']:
+        bank = data[code]
+        bank['full_name'] = bank['name']
+
+    # specific cases
+    for code, _, expand in zip(['2004', '2010', '3000', '3771'], ['商工中金', '全信組連', '農林中金', '秋田たかのす'],
+                               ['商工組合中央金庫', '全国信用協同組合連合会', '農林中央金庫', '秋田たかのす農業協同組合']):
+        bank = data[code]
+        bank['full_name'] = expand
+
+    # abbreviation of financial institutions
+    for bank in data.values():
+        for abbr, expand in zip(
+                ['農協', '漁協', '信漁連', '信組', '信連', '労金', '信金'],
+                ['農業協同組合', '漁業協同組合', '信用漁業協同組合連合会', '信用組合', '信用連合会', '労働金庫', '信用金庫']):
+            if 'full_name' not in bank:
+                if bank['name'].endswith(abbr):
+                    bank['full_name'] = bank['name'][:-len(abbr)] + expand
+
+    # banks
+    for bank in data.values():
+        if 'full_name' not in bank:
+            bank['full_name'] = bank['name'] + '銀行'
+
     # write json file
     with open('zengin/zengindata.json', 'w') as outfile:
         outfile.write(json.dumps(data, ensure_ascii=False, indent=2))
@@ -54,6 +87,7 @@ def write_to_sqlite_db(data, db_file=DB_PATH):
         CREATE TABLE bank(
           bank_code TEXT PRIMARY KEY,
           name TEXT, 
+          full_name TEXT, 
           zen_kana TEXT, 
           han_kana TEXT
         )""")
@@ -71,8 +105,8 @@ def write_to_sqlite_db(data, db_file=DB_PATH):
     cursor.execute("CREATE INDEX ix_code ON branch(bank_code, branch_code)")
 
     for bank in data.values():
-        cursor.execute("INSERT INTO bank(bank_code, name, zen_kana, han_kana)VALUES(?, ?, ?, ?)",
-                       (bank['bank_code'], bank['name'], bank['zen_kana'], bank['han_kana']))
+        cursor.execute("INSERT INTO bank(bank_code, name, full_name, zen_kana, han_kana)VALUES(?, ?, ?, ?, ?)",
+                       (bank['bank_code'], bank['name'], bank['full_name'], bank['zen_kana'], bank['han_kana']))
         for branch in bank['branches'].values():
             cursor.execute("INSERT INTO BRANCH(bank_code, branch_code, name, zen_kana, han_kana, sub_branch) "
                            "VALUES(?, ?, ?, ?, ?, ?)",

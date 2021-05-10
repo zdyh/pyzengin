@@ -54,22 +54,33 @@ class Bank:
     bank_han_kana: str
 
     @classmethod
-    def get(cls, bank_code: Union[int, str]):
-        code = str(int(bank_code)).zfill(4)
-        if len(code) != 4:
-            raise ValueError
+    def is_valid_bank_code(cls, code: Union[int, str]) -> bool:
+        try:
+            code = str(int(code)).zfill(4)
+            return len(code) == 4
+        except ValueError:
+            return False
 
+    @classmethod
+    def get(cls, bank_code: Union[int, str]):
+        if not cls.is_valid_bank_code(bank_code):
+            raise ValueError
+        bank_code = str(int(bank_code)).zfill(4)
         DB.execute(cls._bank_stmt + "WHERE bank_code = ?", (bank_code,))
         res = DB.fetchone()
         if res:
             return cls(*res)
 
     @classmethod
-    def search(cls, name: str):
-        if full_katakana(name.translate(kana_table)):
-            DB.execute(cls._bank_stmt + "WHERE bank_zen_kana LIKE ?", (f'%{name.translate(kana_table)}%',))
+    def search(cls, key: str):
+        if cls.is_valid_bank_code(key):
+            res = cls.get(key)
+            return [res] if res else []
+
+        if full_katakana(key.translate(kana_table)):
+            DB.execute(cls._bank_stmt + "WHERE bank_zen_kana LIKE ?", (f'%{key.translate(kana_table)}%',))
         else:
-            DB.execute(cls._bank_stmt + "WHERE bank_name LIKE ?", (f'%{name}%',))
+            DB.execute(cls._bank_stmt + "WHERE bank_name LIKE ?", (f'%{key}%',))
         res = DB.fetchall()
         if len(res):
             return [cls(*r) for r in res]
@@ -92,6 +103,31 @@ class Bank:
         if len(res):
             return [Branch(*(astuple(self) + r)) for r in res]
 
+    def get_branch(self, branch_code: Union[int, str]):
+        if not Branch.is_valid_branch_code(branch_code):
+            raise ValueError('%r is not valid branch code' % branch_code)
+
+        branch_code = str(int(branch_code)).zfill(3)
+        DB.execute(self._branch_stmt + "AND branch_code=?", (self.bank_code, branch_code,))
+        res = DB.fetchall()
+        if len(res):
+            return [Branch(*(astuple(self) + r)) for r in res]
+        else:
+            return []
+
+    def search_branch(self, key: str):
+        if full_katakana(key.translate(kana_table)):
+            DB.execute(self._branch_stmt + ' AND branch_zen_kana like ?',
+                       (self.bank_code, f'{key.translate(kana_table)}%'))
+        else:
+            DB.execute(self._branch_stmt + ' AND branch_name like ?', (self.bank_code, f'{key}%'))
+
+        res = DB.fetchall()
+        if len(res):
+            return [Branch(*(astuple(self) + r)) for r in res]
+        else:
+            return []
+
 
 @dataclass(frozen=True)
 class Branch(Bank):
@@ -100,8 +136,18 @@ class Branch(Bank):
     branch_zen_kana: str
     branch_han_kana: str
 
+    @classmethod
+    def is_valid_branch_code(cls, code: Union[int, str]) -> bool:
+        try:
+            code = str(int(code)).zfill(3)
+            return len(code) == 3
+        except ValueError:
+            return False
+
     @property
     def branch_full_name(self):
+        if self.branch_name is None:
+            return None
         if self.bank_code == '9900':
             return self.branch_name
         if '営業' in self.branch_name:
@@ -116,37 +162,22 @@ class Branch(Bank):
         return self.__repr__()[:-1] + f", branch_full_name='{self.branch_full_name}')"
 
     @classmethod
-    def search(cls, bank_code, name: str):
-        where_stmt = 's.branch_name like ?'
-        if full_katakana(name.translate(kana_table)):
-            name = name.translate(kana_table)
-            where_stmt = 's.branch_zen_kana like ?'
+    def get(cls, bank_code: Union[int, str], branch_code: Union[int, str]) -> List["Branch"]:
+        if not cls.is_valid_bank_code(bank_code):
+            raise ValueError('%r is not valid bank code' % bank_code)
 
-        DB.execute("SELECT b.bank_code, b.bank_name, b.bank_full_name, b.bank_zen_kana, "
-                   "b.bank_han_kana, s.branch_code, s.branch_name, s.branch_zen_kana, "
-                   "s.branch_han_kana "
-                   "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
-                   "WHERE s.bank_code=? and " + where_stmt, (bank_code, name + '%',))
-        res = DB.fetchall()
-        if len(res):
-            return [cls(*r) for r in res]
-        else:
-            return []
+        bank = Bank.get(bank_code)
+        if bank:
+            return bank.get_branch(branch_code)
 
     @classmethod
-    def get(cls, bank_code: str, branch_code: Union[int, str]) -> List["Branch"]:
-        branch_code = str(int(branch_code)).zfill(3)
-        if len(branch_code) != 3:
-            raise ValueError
+    def search(cls, bank_code, key: str):
+        if not cls.is_valid_bank_code(bank_code):
+            raise ValueError('%r is not valid bank code' % bank_code)
 
-        DB.execute("SELECT s.bank_code, s.branch_code, s.branch_name, s.branch_zen_kana, "
-                   "  s.branch_han_kana, b.bank_name, b.bank_full_name, "
-                   "  b.bank_zen_kana, b.bank_han_kana "
-                   "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
-                   "WHERE s.bank_code=? and s.branch_code=?", (bank_code, branch_code,))
-        res = DB.fetchall()
-        if len(res):
-            return [cls(*r) for r in res]
+        bank = Bank.get(bank_code)
+        if bank:
+            return bank.search_branch(key)
         else:
             return []
 

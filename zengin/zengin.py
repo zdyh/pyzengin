@@ -45,6 +45,8 @@ class Zengin:
 
 @dataclass(frozen=True)
 class Bank:
+    _bank_stmt = "SELECT bank_code, bank_name, bank_full_name, bank_zen_kana, bank_han_kana FROM bank "
+    _branch_stmt = "SELECT branch_code, branch_name, branch_zen_kana, branch_han_kana FROM branch WHERE bank_code = ? "
     bank_code: str
     bank_name: str
     bank_full_name: str
@@ -57,7 +59,7 @@ class Bank:
         if len(code) != 4:
             raise ValueError
 
-        DB.execute("select bank_code, name, full_name, zen_kana, han_kana from bank where bank_code = ?", (code,))
+        DB.execute(cls._bank_stmt + "WHERE bank_code = ?", (bank_code,))
         res = DB.fetchone()
         if res:
             return cls(*res)
@@ -65,11 +67,9 @@ class Bank:
     @classmethod
     def search(cls, name: str):
         if full_katakana(name.translate(kana_table)):
-            DB.execute("SELECT bank_code, name, full_name, zen_kana, han_kana FROM bank WHERE zen_kana LIKE ?",
-                       ('%' + name.translate(kana_table) + '%',))
+            DB.execute(cls._bank_stmt + "WHERE bank_zen_kana LIKE ?", (f'%{name.translate(kana_table)}%',))
         else:
-            DB.execute("SELECT bank_code, name, full_name, zen_kana, han_kana FROM bank WHERE name LIKE ?",
-                       ('%' + name + '%',))
+            DB.execute(cls._bank_stmt + "WHERE bank_name LIKE ?", (f'%{name}%',))
         res = DB.fetchall()
         if len(res):
             return [cls(*r) for r in res]
@@ -78,8 +78,7 @@ class Bank:
 
     @classmethod
     def major_banks(cls):
-        DB.execute("select bank_code, name, full_name, zen_kana, han_kana from bank "
-                   "where bank_code in ('0001', '0005', '0009', '0010', '0017')")
+        DB.execute(cls._bank_stmt + "WHERE bank_code in ('0001', '0005', '0009', '0010', '0017')")
         res = DB.fetchall()
         if len(res):
             return [cls(*r) for r in res]
@@ -88,9 +87,7 @@ class Bank:
 
     @property
     def branches(self):
-        DB.execute("select branch_code, name, zen_kana, han_kana from branch "
-                   "where bank_code = ? order by branch_code",
-                   (self.bank_code,))
+        DB.execute(self._branch_stmt + "ORDER BY branch_code", (self.bank_code,))
         res = DB.fetchall()
         if len(res):
             return [Branch(*(astuple(self) + r)) for r in res]
@@ -104,7 +101,7 @@ class Branch(Bank):
     branch_han_kana: str
 
     @property
-    def full_name(self):
+    def branch_full_name(self):
         if self.bank_code == '9900':
             return self.branch_name
         if '営業' in self.branch_name:
@@ -116,18 +113,18 @@ class Branch(Bank):
         return self.branch_name + '支店'
 
     def __str__(self):
-        return self.__repr__()[:-1] + f", full_name='{self.full_name}')"
+        return self.__repr__()[:-1] + f", branch_full_name='{self.branch_full_name}')"
 
     @classmethod
     def search(cls, bank_code, name: str):
-        where_stmt = 's.name like ?'
+        where_stmt = 's.branch_name like ?'
         if full_katakana(name.translate(kana_table)):
             name = name.translate(kana_table)
-            where_stmt = 's.zen_kana like ?'
+            where_stmt = 's.branch_zen_kana like ?'
 
-        DB.execute("SELECT b.bank_code, b.name bank_name, b.full_name bank_full_name, b.zen_kana bank_zen_kana, "
-                   "b.han_kana bank_han_kana, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
-                   "s.han_kana branch_han_kana "
+        DB.execute("SELECT b.bank_code, b.bank_name, b.bank_full_name, b.bank_zen_kana, "
+                   "b.bank_han_kana, s.branch_code, s.branch_name, s.branch_zen_kana, "
+                   "s.branch_han_kana "
                    "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
                    "WHERE s.bank_code=? and " + where_stmt, (bank_code, name + '%',))
         res = DB.fetchall()
@@ -142,9 +139,9 @@ class Branch(Bank):
         if len(branch_code) != 3:
             raise ValueError
 
-        DB.execute("SELECT s.bank_code, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
-                   "  s.han_kana branch_han_kana, b.name bank_name, b.full_name bank_full_name, "
-                   "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
+        DB.execute("SELECT s.bank_code, s.branch_code, s.branch_name, s.branch_zen_kana, "
+                   "  s.branch_han_kana, b.bank_name, b.bank_full_name, "
+                   "  b.bank_zen_kana, b.bank_han_kana "
                    "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
                    "WHERE s.bank_code=? and s.branch_code=?", (bank_code, branch_code,))
         res = DB.fetchall()

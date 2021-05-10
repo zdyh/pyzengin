@@ -86,36 +86,42 @@ def write_to_sqlite_db(data, db_file=DB_PATH):
     cursor.execute("""
         CREATE TABLE bank(
           bank_code TEXT PRIMARY KEY,
-          name TEXT, 
-          full_name TEXT, 
-          zen_kana TEXT, 
-          han_kana TEXT
+          bank_name TEXT, 
+          bank_full_name TEXT, 
+          bank_zen_kana TEXT, 
+          bank_han_kana TEXT
         )""")
     cursor.execute("DROP TABLE IF EXISTS branch")
     cursor.execute("""
         CREATE TABLE branch(
           bank_code TEXT,
           branch_code TEXT, 
-          name TEXT, 
-          zen_kana TEXT, 
-          han_kana TEXT,
+          branch_name TEXT, 
+          branch_zen_kana TEXT, 
+          branch_han_kana TEXT,
           sub_branch TEXT
         )""")
 
     cursor.execute("CREATE INDEX ix_code ON branch(bank_code, branch_code)")
 
+    bank_insert_stmt = """
+      INSERT INTO bank(bank_code, bank_name, bank_full_name, bank_zen_kana, bank_han_kana) 
+      VALUES(?, ?, ?, ?, ?)"""
+
+    branch_insert_stmt = """
+        INSERT INTO BRANCH(bank_code, branch_code, branch_name, branch_zen_kana, branch_han_kana, sub_branch) 
+        VALUES(?, ?, ?, ?, ?, ?)"""
+
     for bank in data.values():
-        cursor.execute("INSERT INTO bank(bank_code, name, full_name, zen_kana, han_kana)VALUES(?, ?, ?, ?, ?)",
+        cursor.execute(bank_insert_stmt,
                        (bank['bank_code'], bank['name'], bank['full_name'], bank['zen_kana'], bank['han_kana']))
         for branch in bank['branches'].values():
-            cursor.execute("INSERT INTO BRANCH(bank_code, branch_code, name, zen_kana, han_kana, sub_branch) "
-                           "VALUES(?, ?, ?, ?, ?, ?)",
+            cursor.execute(branch_insert_stmt,
                            (bank['bank_code'], branch['branch_code'], branch['name'], branch['zen_kana'],
                             branch['han_kana'], branch['sub_branch']))
             if 'sub_branches' in branch:
                 for sub in branch['sub_branches']:
-                    cursor.execute("INSERT INTO BRANCH(bank_code, branch_code, name, zen_kana, han_kana, sub_branch) "
-                                   "VALUES(?, ?, ?, ?, ?, ?)",
+                    cursor.execute(branch_insert_stmt,
                                    (bank['bank_code'], sub['branch_code'], sub['name'], sub['zen_kana'],
                                     sub['han_kana'], sub['sub_branch']))
     conn.commit()

@@ -1,6 +1,6 @@
 import re
 import sqlite3
-from collections import namedtuple
+from dataclasses import dataclass, astuple
 from pathlib import Path
 from typing import Union, List
 
@@ -43,61 +43,14 @@ class Zengin:
         return get(code, self._db)
 
 
-class Branch(namedtuple('Branch', ['bank_code', 'branch_code', 'branch_name', 'branch_zen_kana', 'branch_han_kana',
-                                   'bank_name', 'bank_full_name', 'bank_zen_kana', 'bank_han_kana'],
-                        defaults=['', '', '', '', '', '', '', '', ''])):
-    @property
-    def full_name(self):
-        if self.bank_code == '9900':
-            return self.branch_name
-        if '営業' in self.branch_name:
-            return self.branch_name
-        if self.branch_name.endswith('店'):
-            return self.branch_name
-        if self.branch_name.endswith('出張所'):
-            return self.branch_name
-        return self.branch_name + '支店'
+@dataclass(frozen=True)
+class Bank:
+    bank_code: str
+    bank_name: str
+    bank_full_name: str
+    bank_zen_kana: str
+    bank_han_kana: str
 
-    def __str__(self):
-        return self.__repr__()[:-1] + f", full_name='{self.full_name}')"
-
-    @classmethod
-    def search(cls, bank_code, name: str):
-        where_stmt = 's.name like ?'
-        if full_katakana(name.translate(kana_table)):
-            name = name.translate(kana_table)
-            where_stmt = 's.zen_kana like ?'
-
-        DB.execute("SELECT s.bank_code, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
-                   "  s.han_kana branch_han_kana, b.name bank_name, b.full_name bank_full_name, "
-                   "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
-                   "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
-                   "WHERE s.bank_code=? and " + where_stmt, (bank_code, name + '%',))
-        res = DB.fetchall()
-        if len(res):
-            return [cls(*r) for r in res]
-        else:
-            return []
-
-    @classmethod
-    def get(cls, bank_code: str, branch_code: Union[int, str]) -> List["Branch"]:
-        branch_code = str(int(branch_code)).zfill(3)
-        if len(branch_code) != 3:
-            raise ValueError
-
-        DB.execute("SELECT s.bank_code, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
-                   "  s.han_kana branch_han_kana, b.name bank_name, b.full_name bank_full_name, "
-                   "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
-                   "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
-                   "WHERE s.bank_code=? and s.branch_code=?", (bank_code, branch_code,))
-        res = DB.fetchall()
-        if len(res):
-            return [cls(*r) for r in res]
-        else:
-            return []
-
-
-class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_full_name', 'bank_zen_kana', 'bank_han_kana'])):
     @classmethod
     def get(cls, bank_code: Union[int, str]):
         code = str(int(bank_code)).zfill(4)
@@ -135,12 +88,70 @@ class Bank(namedtuple('Bank', ['bank_code', 'bank_name', 'bank_full_name', 'bank
 
     @property
     def branches(self):
-        DB.execute("select bank_code, branch_code, name, zen_kana, han_kana from branch "
+        DB.execute("select branch_code, name, zen_kana, han_kana from branch "
                    "where bank_code = ? order by branch_code",
                    (self.bank_code,))
         res = DB.fetchall()
         if len(res):
-            return [Branch(*r)._replace(**self._asdict()) for r in res]
+            return [Branch(*(astuple(self) + r)) for r in res]
+
+
+@dataclass(frozen=True)
+class Branch(Bank):
+    branch_code: str
+    branch_name: str
+    branch_zen_kana: str
+    branch_han_kana: str
+
+    @property
+    def full_name(self):
+        if self.bank_code == '9900':
+            return self.branch_name
+        if '営業' in self.branch_name:
+            return self.branch_name
+        if self.branch_name.endswith('店'):
+            return self.branch_name
+        if self.branch_name.endswith('出張所'):
+            return self.branch_name
+        return self.branch_name + '支店'
+
+    def __str__(self):
+        return self.__repr__()[:-1] + f", full_name='{self.full_name}')"
+
+    @classmethod
+    def search(cls, bank_code, name: str):
+        where_stmt = 's.name like ?'
+        if full_katakana(name.translate(kana_table)):
+            name = name.translate(kana_table)
+            where_stmt = 's.zen_kana like ?'
+
+        DB.execute("SELECT b.bank_code, b.name bank_name, b.full_name bank_full_name, b.zen_kana bank_zen_kana, "
+                   "b.han_kana bank_han_kana, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
+                   "s.han_kana branch_han_kana "
+                   "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
+                   "WHERE s.bank_code=? and " + where_stmt, (bank_code, name + '%',))
+        res = DB.fetchall()
+        if len(res):
+            return [cls(*r) for r in res]
+        else:
+            return []
+
+    @classmethod
+    def get(cls, bank_code: str, branch_code: Union[int, str]) -> List["Branch"]:
+        branch_code = str(int(branch_code)).zfill(3)
+        if len(branch_code) != 3:
+            raise ValueError
+
+        DB.execute("SELECT s.bank_code, s.branch_code, s.name branch_name, s.zen_kana branch_zen_kana, "
+                   "  s.han_kana branch_han_kana, b.name bank_name, b.full_name bank_full_name, "
+                   "  b.zen_kana bank_zen_kana, b.han_kana bank_han_kana "
+                   "FROM bank b INNER JOIN branch s on b.bank_code = s.bank_code "
+                   "WHERE s.bank_code=? and s.branch_code=?", (bank_code, branch_code,))
+        res = DB.fetchall()
+        if len(res):
+            return [cls(*r) for r in res]
+        else:
+            return []
 
 
 def get(bank_code: str, branch_code):

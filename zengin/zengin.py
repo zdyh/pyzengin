@@ -78,9 +78,9 @@ class Bank:
             return [res] if res else []
 
         if full_katakana(key.translate(kana_table)):
-            DB.execute(cls._bank_stmt + "WHERE bank_zen_kana LIKE ?", (f'%{key.translate(kana_table)}%',))
+            DB.execute(cls._bank_stmt + "WHERE bank_zen_kana LIKE ?", (f'{key.translate(kana_table)}%',))
         else:
-            DB.execute(cls._bank_stmt + "WHERE bank_name LIKE ?", (f'%{key}%',))
+            DB.execute(cls._bank_stmt + "WHERE bank_name LIKE ?", (f'{key}%',))
         res = DB.fetchall()
         if len(res):
             return [cls(*r) for r in res]
